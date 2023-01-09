@@ -37,28 +37,22 @@ typedef union netip_pkt {
 } netip_pkt_t;
 
 #define NETIP_HSIZE sizeof(netip_preabmle_t)
-#define NETIP_MAX_JSON sizeof(resp) - NETIP_HSIZE - 1
+#define NETIP_MAX_JSON sizeof(netip_pkt_t) - NETIP_HSIZE - 1
 
-cJSON *json = NULL;
-netip_pkt_t msg;
-char *session_id;
-char payload[1024];
+int netip_connect(int s, char *username, char *pass) {
+  netip_pkt_t msg = {
+      .header.head = 0xff,
+      .header.msgid = LOGIN_REQ2,
+  };
 
-char *netip_connect(int s, char *username, char *pass) {
+  int len = sprintf(msg.header.data,
+                    "{\"EncryptType\": \"MD5\", \"LoginType\": \"DVRIP-Web\", "
+                    "\"PassWord\": \"%s\", \"UserName\": \"%s\"}\n",
+                    pass, username);
+  printf(">>> Login: %s", msg.header.data);
+  msg.header.len_data = len;
 
-  memset(&msg.header, 0, sizeof(msg.header));
-  msg.header.head = 0xff;
-  msg.header.msgid = LOGIN_REQ2;
-  sprintf(payload,
-          "{\"EncryptType\": \"MD5\", \"LoginType\": \"DVRIP-Web\", "
-          "\"PassWord\": \"%s\", \"UserName\": \"%s\"}\n",
-          pass, username);
-  printf(">>> Login: %s", payload);
-
-  strcpy(msg.header.data, payload);
-  msg.header.len_data = sizeof(payload);
-
-  if (send(s, &msg, sizeof(payload) + NETIP_HSIZE, 0) < 0) {
+  if (send(s, &msg, len + NETIP_HSIZE, 0) < 0) {
     goto quit;
   }
 
@@ -66,7 +60,7 @@ char *netip_connect(int s, char *username, char *pass) {
     goto quit;
   }
 
-  json = cJSON_Parse(msg.header.data);
+  cJSON *json = cJSON_Parse(msg.header.data);
   if (!json) {
     const char *error_ptr = cJSON_GetErrorPtr();
     if (error_ptr != NULL) {
@@ -75,18 +69,19 @@ char *netip_connect(int s, char *username, char *pass) {
     goto quit;
   }
 
-  session_id = get_json_strval(json, "SessionID", "");
-  return session_id;
+  const char *session_id = get_json_strval(json, "SessionID", "");
+  cJSON_Delete(json);
+  return strtoul(session_id, NULL, 16);
 
 quit:
-  return "null";
+  return -1;
 }
 
-char *netip_req(int s, int op) {
-
-  memset(&msg.header, 0, sizeof(msg.header));
-  msg.header.head = 0xff;
-  msg.header.msgid = op;
+char *netip_req(int s, int op, const char *payload, char outbuf[NETIP_MAX_JSON]) {
+  netip_pkt_t msg = {
+      .header.head = 0xff,
+      .header.msgid = op,
+  };
 
   printf(">>> Payload: %s\n", payload);
 
@@ -100,11 +95,12 @@ char *netip_req(int s, int op) {
     goto quit;
   }
   printf(">>> Resp: %s\n", msg.header.data);
-  return msg.header.data;
+  memcpy(outbuf, msg.header.data, msg.header.len_data);
+  return outbuf;
 
 quit:
   printf("error\n");
-  return "c";
+  return NULL;
 }
 
 char *read_file(char *filename) {
@@ -130,11 +126,11 @@ char *read_file(char *filename) {
 }
 
 int main() {
-  const char *host_ip = "172.16.1.142";
+  const char *host_ip = "10.216.128.125";
   const int netip_port = 34567;
 
   char *username = "admin";
-  char *pass = "QyZfVmgd";
+  char *pass = "tlJwpbo6";
 
   int s = socket(AF_INET, SOCK_STREAM, 0);
   if (s == -1)
@@ -161,21 +157,22 @@ int main() {
   }
   fcntl(s, F_SETFL, flags);
 
-  printf("<<< SessionID: %s\n", netip_connect(s, username, pass));
+  int session_id = netip_connect(s, username, pass);
+  printf("<<< SessionID: %#x\n", session_id);
 
-  memset(payload, 0, sizeof(payload));
-
-  sprintf(payload, "{\"Name\": \"SystemInfo\", \"SessionID\": \"%s\"}\n",
+  char payload[1024] = {0};
+  sprintf(payload, "{\"Name\": \"SystemInfo\", \"SessionID\": \"%#.8x\"}\n",
           session_id);
 
-  json = cJSON_Parse(netip_req(s, SYSINFO_REQ));
+  cJSON *json =
+      cJSON_Parse(netip_req(s, SYSINFO_REQ, payload, (char[NETIP_MAX_JSON]){0}));
 
   char *newpass = "tlJwpbo6";
   char *newuser = "viewer";
 
   sprintf(payload,
           "{\"EncryptType\": \"MD5\", \"NewPassWord\": \"%s\", \"PassWord\": "
-          "\"%s\", \"SessionID\": \"%s\", \"UserName\": \"%s\"}",
+          "\"%s\", \"SessionID\": \"%#.8x\", \"UserName\": \"%s\"}",
           newpass, pass, session_id, newuser);
   // netip_req(s, MODIFYPASSWORD_REQ);
 
