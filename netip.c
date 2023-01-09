@@ -53,11 +53,11 @@ int netip_connect(int s, char *username, char *pass) {
   msg.header.len_data = len;
 
   if (send(s, &msg, len + NETIP_HSIZE, 0) < 0) {
-    goto quit;
+    return -1;
   }
 
   if (recv(s, &msg, sizeof(msg), 0) <= NETIP_HSIZE) {
-    goto quit;
+    return -1;
   }
 
   cJSON *json = cJSON_Parse(msg.header.data);
@@ -66,7 +66,7 @@ int netip_connect(int s, char *username, char *pass) {
     if (error_ptr != NULL) {
       fprintf(stderr, "Error before: %s\n", error_ptr);
     }
-    goto quit;
+    return -1;
   }
 
   printf("'%s'\n", msg.header.data);
@@ -75,9 +75,6 @@ int netip_connect(int s, char *username, char *pass) {
   int session_id = strtoul(session_str, NULL, 16);
   cJSON_Delete(json);
   return session_id;
-
-quit:
-  return -1;
 }
 
 cJSON *netip_req(int s, int op, const char *payload) {
@@ -129,6 +126,7 @@ char *read_file(char *filename) {
 }
 
 int main() {
+  cJSON *json = NULL;
   const char *host_ip = "10.216.128.125";
   const int netip_port = 34567;
 
@@ -161,13 +159,17 @@ int main() {
   fcntl(s, F_SETFL, flags);
 
   int session_id = netip_connect(s, username, pass);
+  if (session_id == -1) {
+    printf("Connection failed\n");
+    goto quit;
+  }
   printf("<<< SessionID: %#x\n", session_id);
 
   char payload[1024] = {0};
   sprintf(payload, "{\"Name\": \"SystemInfo\", \"SessionID\": \"%#.8x\"}\n",
           session_id);
 
-  cJSON *json = netip_req(s, SYSINFO_REQ, payload);
+  json = netip_req(s, SYSINFO_REQ, payload);
 
   char *newpass = "tlJwpbo6";
   char *newuser = "viewer";
