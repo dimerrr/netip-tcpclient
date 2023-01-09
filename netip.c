@@ -69,15 +69,18 @@ int netip_connect(int s, char *username, char *pass) {
     goto quit;
   }
 
-  const char *session_id = get_json_strval(json, "SessionID", "");
+  printf("'%s'\n", msg.header.data);
+
+  const char *session_str = get_json_strval(json, "SessionID", "");
+  int session_id = strtoul(session_str, NULL, 16);
   cJSON_Delete(json);
-  return strtoul(session_id, NULL, 16);
+  return session_id;
 
 quit:
   return -1;
 }
 
-char *netip_req(int s, int op, const char *payload, char outbuf[NETIP_MAX_JSON]) {
+cJSON *netip_req(int s, int op, const char *payload) {
   netip_pkt_t msg = {
       .header.head = 0xff,
       .header.msgid = op,
@@ -86,17 +89,17 @@ char *netip_req(int s, int op, const char *payload, char outbuf[NETIP_MAX_JSON])
   printf(">>> Payload: %s\n", payload);
 
   strcpy(msg.header.data, payload);
-  msg.header.len_data = sizeof(payload);
+  msg.header.len_data = strlen(payload);
 
-  if (send(s, &msg, sizeof(payload) + NETIP_HSIZE, 0) < 0) {
+  if (send(s, &msg, msg.header.len_data + NETIP_HSIZE, 0) < 0) {
     goto quit;
   }
   if (recv(s, &msg, sizeof(msg), 0) <= NETIP_HSIZE) {
     goto quit;
   }
   printf(">>> Resp: %s\n", msg.header.data);
-  memcpy(outbuf, msg.header.data, msg.header.len_data);
-  return outbuf;
+  cJSON *json = cJSON_Parse(msg.header.data);
+  return json;
 
 quit:
   printf("error\n");
@@ -164,8 +167,7 @@ int main() {
   sprintf(payload, "{\"Name\": \"SystemInfo\", \"SessionID\": \"%#.8x\"}\n",
           session_id);
 
-  cJSON *json =
-      cJSON_Parse(netip_req(s, SYSINFO_REQ, payload, (char[NETIP_MAX_JSON]){0}));
+  cJSON *json = netip_req(s, SYSINFO_REQ, payload);
 
   char *newpass = "tlJwpbo6";
   char *newuser = "viewer";
@@ -174,7 +176,7 @@ int main() {
           "{\"EncryptType\": \"MD5\", \"NewPassWord\": \"%s\", \"PassWord\": "
           "\"%s\", \"SessionID\": \"%#.8x\", \"UserName\": \"%s\"}",
           newpass, pass, session_id, newuser);
-  // netip_req(s, MODIFYPASSWORD_REQ);
+  // netip_req(s, MODIFYPASSWORD_REQ, payload);
 
 quit:
   if (json)
