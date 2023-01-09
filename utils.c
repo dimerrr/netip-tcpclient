@@ -1,7 +1,7 @@
 #include "cjson/cJSON.h"
 #include "utils.h"
 
-char *get_json_strval(const cJSON *json, const char *key,
+const char *get_json_strval(const cJSON *json, const char *key,
                             const char *def_val) {
   const cJSON *jval = cJSON_GetObjectItemCaseSensitive(json, key);
   if (cJSON_IsString(jval) && (jval->valuestring != NULL)) {

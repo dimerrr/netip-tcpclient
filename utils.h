@@ -1,7 +1,7 @@
 #ifndef UTILS_H
 #define UTILS_H
 
-char *get_json_strval(const cJSON *json, const char *key,
+const char *get_json_strval(const cJSON *json, const char *key,
                             const char *def_val);
 const char *get_json_strvalchild(const cJSON *json, const char *key,
                             const char *def_val);

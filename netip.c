@@ -1,4 +1,3 @@
-#include <asm-generic/socket.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -124,8 +123,10 @@ char *read_file(char *filename) {
     fclose(f);
   }
 
-  if (buffer)
-    return buffer;
+  if (!buffer)
+    return NULL;
+
+  return buffer;
 }
 
 int main() {
