@@ -49,7 +49,7 @@ char *netip_connect(int s, char *username, char *pass) {
 
   memset(&msg.header, 0, sizeof(msg.header));
   msg.header.head = 0xff;
-  msg.header.msgid = LOGIN_REQ;
+  msg.header.msgid = LOGIN_REQ2;
   sprintf(payload,
           "{\"EncryptType\": \"MD5\", \"LoginType\": \"DVRIP-Web\", "
           "\"PassWord\": \"%s\", \"UserName\": \"%s\"}\n",
