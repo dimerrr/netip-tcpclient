@@ -11,6 +11,7 @@
 #include <unistd.h>
 
 #include "cjson/cJSON.h"
+#include "md5.h"
 #include "netip.h"
 #include "utils.h"
 
@@ -38,6 +39,20 @@ typedef union netip_pkt {
 
 #define NETIP_HSIZE sizeof(netip_preabmle_t)
 #define NETIP_MAX_JSON sizeof(netip_pkt_t) - NETIP_HSIZE - 1
+
+#define sofiaHashChars                                                         \
+  "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+
+char *sofia_hash(const char *plain_pwd, char out[1024]) {
+  unsigned char hashDigest[MD5_DIGEST_LENGTH];
+  md5((unsigned char *)plain_pwd, strlen(plain_pwd), hashDigest);
+
+  for (int i = 0; i < MD5_DIGEST_LENGTH; i += 2) {
+    out[i / 2] = sofiaHashChars[(hashDigest[i] + hashDigest[i + 1]) % 62];
+  }
+
+  return out;
+}
 
 int netip_connect(int s, char *username, char *pass) {
   netip_pkt_t msg = {
@@ -173,6 +188,9 @@ int main() {
 
   char *newpass = "tlJwpbo6";
   char *newuser = "viewer";
+
+  printf("no pass: '%s'\n", sofia_hash("", (char[1024]){0}));
+  printf("12345 pass: '%s'\n", sofia_hash("12345", (char[1024]){0}));
 
   sprintf(payload,
           "{\"EncryptType\": \"MD5\", \"NewPassWord\": \"%s\", \"PassWord\": "
